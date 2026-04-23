@@ -15,7 +15,8 @@
  */
 package com.google.inject.internal;
 
-import com.google.common.collect.Ordering;
+import static com.google.common.collect.Comparators.lexicographical;
+
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Arrays;
@@ -36,24 +37,14 @@ public final class DeclaredMembers {
 
   private DeclaredMembers() {}
 
-  public static Field[] getDeclaredFields(Class<?> type) {
-    return Arrays.stream(type.getDeclaredFields())
-        .sorted(
-            Comparator.comparing(Field::getName)
-                .thenComparing(Field::getType, Comparator.comparing(Class::getName)))
-        .toArray(Field[]::new);
-  }
+  public static final Comparator<Field> FIELD_COMPARATOR =
+      Comparator.comparing(Field::getName)
+          .thenComparing(Field::getType, Comparator.comparing(Class::getName));
 
-  public static Method[] getDeclaredMethods(Class<?> type) {
-    return Arrays.stream(type.getDeclaredMethods())
-        .sorted(
-            Comparator.comparing(Method::getName)
-                .thenComparing(Method::getReturnType, Comparator.comparing(Class::getName))
-                .thenComparing(
-                    method -> Arrays.asList(method.getParameterTypes()),
-                    // TODO: use Comparators.lexicographical when it's not @Beta.
-                    Ordering.<Class<?>>from(Comparator.comparing(Class::getName))
-                        .lexicographical()))
-        .toArray(Method[]::new);
-  }
+  public static final Comparator<Method> METHOD_COMPARATOR =
+      Comparator.comparing(Method::getName)
+          .thenComparing(Method::getReturnType, Comparator.comparing(Class::getName))
+          .thenComparing(
+              method -> Arrays.asList(method.getParameterTypes()),
+              lexicographical(Comparator.comparing(Class::getName)));
 }

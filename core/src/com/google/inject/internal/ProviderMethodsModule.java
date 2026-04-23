@@ -39,6 +39,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -114,30 +115,30 @@ public final class ProviderMethodsModule implements Module {
     // The highest class in the type hierarchy that contained a provider method definition.
     Class<?> superMostClass = getDelegateModuleClass();
     for (Class<?> c = superMostClass; c != Object.class && c != null; c = c.getSuperclass()) {
-      for (Method method : DeclaredMembers.getDeclaredMethods(c)) {
-        Annotation annotation = getAnnotation(binder, method);
-        if (annotation != null) {
-          if (isStaticModule()
-              && !Modifier.isStatic(method.getModifiers())
-              && !Modifier.isAbstract(method.getModifiers())) {
-            binder.addError(
-                "%s is an instance method, but a class literal was passed. Make this method"
-                    + " static or pass an instance of the module instead.",
-                method);
-            continue;
-          }
-          if (result == null) {
-            result = new ArrayList<>();
-            methodsAndAnnotations = new ArrayList<>();
-          }
-
-          ProviderMethod<Object> providerMethod = createProviderMethod(binder, method, annotation);
-          if (providerMethod != null) {
-            result.add(providerMethod);
-          }
-          methodsAndAnnotations.add(new MethodAndAnnotation(method, annotation));
-          superMostClass = c;
+      for (MethodAndAnnotation methodAndAnnotation :
+          getDeclaredProviderAnnotatedMethods(c, binder)) {
+        Annotation annotation = methodAndAnnotation.annotation;
+        Method method = methodAndAnnotation.method;
+        if (isStaticModule()
+            && !Modifier.isStatic(method.getModifiers())
+            && !Modifier.isAbstract(method.getModifiers())) {
+          binder.addError(
+              "%s is an instance method, but a class literal was passed. Make this method"
+                  + " static or pass an instance of the module instead.",
+              method);
+          continue;
         }
+        if (result == null) {
+          result = new ArrayList<>();
+          methodsAndAnnotations = new ArrayList<>();
+        }
+
+        ProviderMethod<Object> providerMethod = createProviderMethod(binder, method, annotation);
+        if (providerMethod != null) {
+          result.add(providerMethod);
+        }
+        methodsAndAnnotations.add(methodAndAnnotation);
+        superMostClass = c;
       }
     }
     if (result == null) {
@@ -198,6 +199,22 @@ public final class ProviderMethodsModule implements Module {
         }
       }
     }
+    return result;
+  }
+
+  private static final Comparator<MethodAndAnnotation> METHOD_AND_ANNOTATION_COMPARATOR =
+      Comparator.comparing(
+          methodAndAnnotation -> methodAndAnnotation.method, DeclaredMembers.METHOD_COMPARATOR);
+
+  private List<MethodAndAnnotation> getDeclaredProviderAnnotatedMethods(Class<?> c, Binder binder) {
+    List<MethodAndAnnotation> result = new ArrayList<>();
+    for (Method method : c.getDeclaredMethods()) {
+      Annotation annotation = getAnnotation(binder, method);
+      if (annotation != null) {
+        result.add(new MethodAndAnnotation(method, annotation));
+      }
+    }
+    result.sort(METHOD_AND_ANNOTATION_COMPARATOR);
     return result;
   }
 
